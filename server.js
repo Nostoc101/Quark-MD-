@@ -29,7 +29,7 @@ const CHANNEL_NAME = "DANGER-MD OFFICIAL"
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server); 
+const io = new Server(server);
 
 // ========== DATABASE ==========
 const db = new Low(new JSONFile('chatdb.json'));
@@ -233,10 +233,3 @@ async function startSession(number) {
         const msg = messages[0]; if(!msg.message || msg.key.fromMe) return;
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
         const from = m
-
-// ========== KEEP ALIVE FOR RAILWAY/RENDER ==========
-setInterval(() => {
-    console.log(`${BOT_NAME} alive - ${new Date().toLocaleString()}`)
-}, 300000) // 5 minutes
-
-console.log(`⚡ ${BOT_NAME} Started Successfully`)
