@@ -1,16 +1,14 @@
 {
-  "name": "danger-md",
-  "version": "10.38.0",
+  "name": "danger-panel",
+  "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
-  "scripts": { "start": "node index.js" },
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
   "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "better-sqlite3": "^9.4.3",
     "@whiskeysockets/baileys": "^6.7.18",
-    "@hapi/boom": "^10.0.1",
-    "lowdb": "^7.0.1",
-    "yt-search": "^2.11.1",
-    "ytdl-core": "^4.11.5",
-    "pino": "^9.6.0",
-    "dotenv": "^16.4.5"
+    "pino": "^9.6.0"
   }
 }
