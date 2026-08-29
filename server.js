@@ -12,7 +12,6 @@ import yts from 'yt-search';
 import ytdl from 'ytdl-core';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
-import Database from 'better-sqlite3';
 
 const streamPipeline = promisify(pipeline);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,11 +34,23 @@ await db.read();
 db.data ||= { paired: [], pendingRequests: [], warns: {}, antibot: {}, antibadword: {}, antilink: {}, badwords: ['ngwa','mumu','idiot'], chatHistory: {} };
 await db.write();
 
-const sqlDb = new Database('db.sqlite');
-sqlDb.exec(`CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT UNIQUE, status TEXT DEFAULT 'waiting', code TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-const addSession = sqlDb.prepare('INSERT OR IGNORE INTO sessions (number, status) VALUES (?, "waiting")');
-const updateSession = sqlDb.prepare('UPDATE sessions SET status =?, code =? WHERE number =?');
-const getAllSessions = sqlDb.prepare('SELECT * FROM sessions ORDER BY id DESC');
+// ========== SESSIONS USING LOWDB ==========
+async function addSession(number) {
+  await db.read();
+  db.data.sessions ||= [];
+  if(!db.data.sessions.find(s => s.number === number)) {
+    db.data.sessions.push({number, status: 'waiting', code: null, created_at: new Date().toISOString()});
+    await db.write();
+  }
+}
+async function updateSession(status, code, number) {
+  await db.read();
+  const s = db.data.sessions.find(s => s.number === number);
+  if(s) {s.status = status; s.code = code; await db.write();}
+}
+function getAllSessions() {
+  return db.data.sessions || [];
+}
 
 function isMaster(jid){ return jidDecode(jid).user === MASTER; }
 async function isPaired(num){ await db.read(); return db.data.paired.find(p => typeof p === 'object'? p.number === num : p === num); }
