@@ -55,8 +55,7 @@ function isMaster(jid){ return jidDecode(jid).user === MASTER; }
 async function isPaired(num){ await db.read(); return db.data.paired.find(p => typeof p === 'object'? p.number === num : p === num); }
 
 async function forwardChannelToGroups(sock, number) {
-  await db.read();
-  const groups = sock.groupFetchAllParticipating? await sock.groupFetchAllParticipating() : {};
+  const groups = await sock.groupFetchAllParticipating();
   const text = `${DIABLO_BANNER}\n\n*NEW BOT PAIRED*\n*Number:* 234${number}\n*By:* MASTER\n*Join:* ${CHANNEL_LINK}`;
   for(const jid in groups) {
     try{ await sock.sendMessage(jid, {text}) }catch(e){}
@@ -68,6 +67,7 @@ async function broadcastToAllGroups(sock, message) {
     try{ await sock.sendMessage(jid, {text: `${DIABLO_BANNER}\n\n${message}`}) }catch(e){}
   }
 }
+
 app.use(express.json());
 app.use(express.static('public'));
 app.get('/api/sessions', (req,res) => res.json(getAllSessions()));
@@ -87,23 +87,18 @@ cmd('ai','all','Chat with AI', async(sock, msg, args) => {const prompt = args.jo
 cmd('clear','all','Clear AI chat', async(sock, msg) => {const sender = jidDecode(msg.key.participant || msg.key.remoteJid).user; await db.read(); db.data.chatHistory[sender] = []; await db.write(); await sock.sendMessage(msg.key.remoteJid, {text: `✅ Cleared`})});
 cmd('menu','all','Show menu', async(s,m)=>s.sendMessage(m.key.remoteJid,{text:`${DIABLO_BANNER}\n\n*GUEST:*.ai.clear.menu.help.requestpair\n*GROUP ADMIN:*.play.audio.video.download.kick.ban.promote.demote.add.tagall.mute.unmute.group.warn.del.promoteall.demoteall.antibot.antibadword.antilink\n*PAIRED:*.play.audio.video.download.pair.channel\n*MASTER:*.approve.deny.pending.pairedlist.unpair.broadcastchannel\n*FOLLOW OUR CHANNEL:* ${CHANNEL_LINK}`}));
 cmd('help','all','List commands', async(s,m)=>s.sendMessage(m.key.remoteJid,{text:`${DIABLO_BANNER}\n\n*GROUP ADMIN:*.play.download.kick.ban.promote.demote.add.tagall.mute.unmute.group.warn.del.promoteall.demoteall.antibot.antibadword.antilink\n*PAIRED:*.channel\n*MASTER:*.broadcastchannel`}));
-cmd('channel','all','Get channel link', async(sock, msg) => {await sock.sendMessage(msg.key.remoteJid, {text: `*FOLLOW ${CHANNEL_NAME}*`,contextInfo: {externalAdReply: {title: CHANNEL_NAME,body: "Scripts • Updates • Codes",mediaType: 1,thumbnailUrl: "https://i.imgur.com/8Km9tLL.png",sourceUrl: CHANNEL_LINK}}}})});
+cmd('channel','all','Get channel link', async(sock, msg) => {await sock.sendMessage(msg.key.remoteJid, {text: `*FOLLOW ${CHANNEL_NAME}*`,contextInfo: {externalAdReply: {title: CHANNEL_NAME,body: "Scripts • Updates • Codes",mediaType: 1,thumbnailUrl: "https://i.imgur.com/8Km9tLL.png",sourceUrl: CHANNEL_LINK}}})}); // FIXED
 cmd('download','paired','Download', async(sock, msg, args) => {const from = msg.key.remoteJid; const type = args[0]; const query = args.slice(1).join(' '); if(!type ||!query) return sock.sendMessage(from, {text: `❌ Use: ${PREFIX}download video|audio name`}); try {const search = await yts(query); const video = search.videos[0]; const filePath = `./tmp/${video.videoId}.${type==='video'?'mp4':'mp3'}`; if(!fs.existsSync('./tmp')) fs.mkdirSync('./tmp'); await streamPipeline(ytdl(video.url, { filter: type==='audio'?'audioonly':undefined }), fs.createWriteStream(filePath)); await sock.sendMessage(from, type==='video'?{video:{url:filePath}} :{audio:{url:filePath},mimetype:'audio/mpeg'}); fs.unlinkSync(filePath);} catch(e) { await sock.sendMessage(from, {text: `❌ Error`}); }});
 cmd('video','paired','Download video', async(sock, msg, args) => commands.get('download').run(sock, msg, ['video',...args]));
 cmd('audio','paired','Download audio', async(sock, msg, args) => commands.get('download').run(sock, msg, ['audio',...args]));
 cmd('play','paired','Play music', async(sock, msg, args) => commands.get('download').run(sock, msg, ['audio',...args]));
-//... add cmd11 to cmd50 here
-for(let i=11;i<=50;i++){ cmd(`cmd${i}`,'paired',`Utility ${i}`, async(s,m)=>s.sendMessage(m.key.remoteJid,{text:`Cmd ${i}`}))}
-for(let i=51;i<=180;i++){ cmd(`cmd${i}`,'paired',`Utility ${i}`, async(s,m)=>s.sendMessage(m.key.remoteJid,{text:`Cmd ${i}`}))}
-
 cmd('promote','groupadmin','Make admin', async(sock, msg, args) => {const from = msg.key.remoteJid; if(!from.endsWith('@g.us')) return sock.sendMessage(from, {text: `❌ Use in group`}); const target = msg.message.extendedTextMessage?.contextInfo?.participant[0] || args[0]?.replace(/\D/g,'') + '@s.whatsapp.net'; await sock.groupParticipantsUpdate(from, [target], "promote"); await sock.sendMessage(from, {text: `✅ Promoted`, mentions: [target]})});
 cmd('demote','groupadmin','Demote admin', async(sock, msg, args) => {const from = msg.key.remoteJid; if(!from.endsWith('@g.us')) return sock.sendMessage(from, {text: `❌ Use in group`}); const target = msg.message.extendedTextMessage?.contextInfo?.participant[0] || args[0]?.replace(/\D/g,'') + '@s.whatsapp.net'; await sock.groupParticipantsUpdate(from, [target], "demote"); await sock.sendMessage(from, {text: `✅ Demoted`, mentions: [target]})});
 cmd('kick','groupadmin','Kick', async(sock, msg, args) => {const from = msg.key.remoteJid; if(!from.endsWith('@g.us')) return; const target = msg.message.extendedTextMessage?.contextInfo?.participant[0] || args[0]?.replace(/\D/g,'') + '@s.whatsapp.net'; await sock.groupParticipantsUpdate(from, [target], "remove"); await sock.sendMessage(from, {text: `✅ Kicked`, mentions: [target]})});
 cmd('warn','groupadmin','Warn user', async(sock, msg, args) => {const from = msg.key.remoteJid; const target = msg.message.extendedTextMessage?.contextInfo?.participant[0] || args[0]?.replace(/\D/g,'') + '@s.whatsapp.net'; if(!target) return; const reason = args.slice(1).join(' ') || 'No reason'; await db.read(); db.data.warns[target] = (db.data.warns[target] || 0) + 1; await db.write(); const count = db.data.warns[target]; await sock.sendMessage(from, {text: `⚠️ *WARN ${count}/10*\n*User:* @${target.split('@')[0]}\n*Reason:* ${reason}`, mentions: [target]}); if(count >= 10) {await sock.groupParticipantsUpdate(from, [target], "remove"); await sock.sendMessage(from, {text: `❌ @${target.split('@')[0]} kicked after 10 warns`, mentions: [target]}); db.data.warns[target] = 0; await db.write();}});
-cmd('pair','all','Generate code', async(sock, msg, args) => {const from = msg.key.remoteJid; const sender = jidDecode(msg.key.participant || msg.key.remoteJid).user; let isGroupAdmin = false; if(from.endsWith('@g.us')){const metadata = await sock.groupMetadata(from); const participant = metadata.participants.find(p => p.id.includes(sender)); isGroupAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin';} const canPair = isGroupAdmin || isMaster(sender) || await isPaired(sender); if(!canPair) return sock.sendMessage(from, {text: `❌ No permission`}); let number = args[0] || sender; number = number.replace(/\D/g,''); const code = await sock.requestPairingCode(number); await sock.sendMessage(from, {text: `${DIABLO_BANNER}\n\n*CODE:* \`\`${code}\`\`\n\n*FOLLOW:* ${CHANNEL_LINK}`}); await db.read(); if(!await isPaired(number)){db.data.paired.push({number: number, pairedBy: sender, time: new Date().toISOString()}); await db.write(); forwardChannelToGroups(sock, number);}});
+cmd('pair','all','Generate code', async(sock, msg, args) => {const from = msg.key.remoteJid; const sender = jidDecode(msg.key.participant || msg.key.remoteJid).user; let isGroupAdmin = false; if(from.endsWith('@g.us')){const metadata = await sock.groupMetadata(from); const participant = metadata.participants.find(p => p.id.includes(sender)); isGroupAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin';} const canPair = isGroupAdmin || isMaster(sender) || await isPaired(sender); if(!canPair) return sock.sendMessage(from, {text: `❌ No permission`}); let number = args[0] || sender; number = number.replace(/\D/g,''); const code = await sock.requestPairingCode(number); await sock.sendMessage(from, {text: `${DIABLO_BANNER}\n\n*CODE:* \`\`${code}\`\n\n*FOLLOW:* ${CHANNEL_LINK}`}); await db.read(); if(!await isPaired(number)){db.data.paired.push({number: number, pairedBy: sender, time: new Date().toISOString()}); await db.write(); forwardChannelToGroups(sock, number);}});
 cmd('broadcastchannel','master','Broadcast to all groups', async(sock, msg, args) => {const text = args.join(' '); if(!text) return sock.sendMessage(msg.key.remoteJid, {text: `❌ Use: ${PREFIX}broadcastchannel text`}); await broadcastToAllGroups(sock, text);});
-
-const sessions = new Map();
+for(let i=1;i<=170;i++){ cmd(`cmd${i}`,'paired',`Utility ${i}`, async(s,m)=>s.sendMessage(m.key.remoteJid,{text:`Cmd ${i}`}))}const sessions = new Map();
 async function startSession(number) {
     const sessionPath = `auth_info/${number}`;
     if(!fs.existsSync(sessionPath)) fs.mkdirSync(sessionPath, {recursive: true});
@@ -111,6 +106,7 @@ async function startSession(number) {
     const sock = makeWASocket({logger: pino({level: 'silent'}), auth: state, browser: Browsers.macOS('Desktop')});
     sessions.set(number, sock);
     sock.ev.on('creds.update', saveCreds);
+
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         if(connection === 'open') {await updateSession('connected', null, number); await broadcastToAllGroups(sock, `✅ Bot 234${number} is ONLINE and running v10.44`);}
@@ -129,6 +125,15 @@ async function startSession(number) {
         if(!text.startsWith(PREFIX)) return;
         const args = text.slice(PREFIX.length).trim().split(/ +/);
         const cmdName = args.shift().toLowerCase(); const command = commands.get(cmdName); if(!command) return;
+
+        const isPairedUser = await isPaired(senderNum);
+        const isMasterUser = isMaster(sender);
+        const isAdminUser = ADMINS.includes(senderNum);
+        let isGroupAdmin = false;
+        if(from.endsWith('@g.us')){try {const metadata = await sock.groupMetadata(from); const participant = metadata.participants.find(p => p.id.includes(senderNum)); isGroupAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin';} catch(e) {}}
+        if(command.level === 'master' &&!isMasterUser) return sock.sendMessage(from, {text: `❌ Only MASTER`});
+        if(command.level === 'groupadmin' &&!isMasterUser &&!isGroupAdmin) return sock.sendMessage(from, {text: `❌ Only Group Admins + MASTER`});
+        if(command.level === 'paired' &&!isMasterUser &&!isPairedUser &&!isAdminUser &&!isGroupAdmin) return sock.sendMessage(from, {text: `❌ Only Group Admins + PAIRED + MASTER`});
         await command.run(sock, msg, args);
     });
 
